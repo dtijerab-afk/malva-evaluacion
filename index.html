@@ -147,6 +147,26 @@ canvas.sc{display:block;touch-action:none;cursor:crosshair;width:100%;height:120
 #sc-home,#sc-select,#sc-eval,#sc-report,#sc-view{display:none}
 
 .sync-dot{width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block;margin-left:4px;vertical-align:middle}
+
+/* HISTORY SCREEN */
+.hist-asesor-card{background:#fff;border:1.5px solid var(--BR);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.hist-asesor-card:active{background:var(--PLT)}
+.hist-asesor-card .ha-name{font-size:14px;font-weight:700}
+.hist-asesor-card .ha-meta{font-size:11px;color:var(--TXL);margin-top:2px}
+.hist-asesor-card .ha-row{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.trend-up{color:#10B981;font-weight:700}
+.trend-dn{color:#EF4444;font-weight:700}
+.trend-eq{color:var(--TXL);font-weight:700}
+.tl-card{background:#fff;border:1px solid var(--BR);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.tl-card:active{background:var(--PLT)}
+.tl-date{font-size:11px;color:var(--TXL)}
+.tl-score{font-size:18px;font-weight:800}
+.chart-wrap{background:#fff;border:1px solid var(--BR);border-radius:10px;padding:12px;margin-bottom:12px}
+.chart-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--TXL);margin-bottom:10px}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.stat-box{background:#fff;border:1px solid var(--BR);border-radius:8px;padding:10px;text-align:center}
+.stat-box .sv{font-size:22px;font-weight:800;line-height:1}
+.stat-box .sl{font-size:10px;color:var(--TXL);margin-top:2px}
 .empty{text-align:center;padding:24px;color:var(--TXL);font-size:13px}
 @media(max-width:400px){.sig-grid{grid-template-columns:1fr}.row2{grid-template-columns:1fr}.sbi .v{font-size:15px}.sbi.fin .v{font-size:19px}}
 </style>
@@ -723,6 +743,7 @@ function renderSessions(){
       '<div class="sess-actions">'+
       '<span class="badge '+cls+'" style="font-size:13px;padding:3px 9px">'+score+'</span>'+
       '<button class="icon-btn view" onclick="viewSavedSession('+s.id+')">Ver</button>'+
+      '<button class="icon-btn" onclick="openHistById('+s.id+')" title="Historial" style="font-size:11px;padding:4px 7px">📈</button>'+
       '<button class="icon-btn" onclick="deleteSession('+s.id+')" title="Eliminar">🗑</button>'+
       '</div></div>';
   }).join('');
@@ -971,7 +992,211 @@ function exportReportPDF(){
     setTimeout(function(){URL.revokeObjectURL(url);document.body.removeChild(a);},2000);
   }catch(e){showToast('Error PDF: '+e.message);}
 }
+
+// ── HISTORY ──
+var currentHistAsesor = '';
+
+function openHistById(id){
+  var sess=getSessions().find(function(s){return s.id===id;});
+  if(sess) openHist(sess.asesor);
+}
+function openHist(asesor){
+  currentHistAsesor = asesor;
+  renderHist(asesor);
+  showScreen('sc-hist');
+}
+
+function renderHist(asesor){
+  var sessions = getSessions().filter(function(s){return s.asesor===asesor;});
+  sessions.sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
+  document.getElementById('hist-title').textContent = '📈 ' + asesor;
+  if(!sessions.length){
+    document.getElementById('hist-stats').innerHTML='<div class="empty" style="grid-column:1/-1">Sin evaluaciones.</div>';
+    document.getElementById('hist-sessions').innerHTML='';
+    return;
+  }
+  var scores = sessions.map(function(s){return s.finalScore||0;});
+  var avg = scores.reduce(function(a,b){return a+b;},0)/scores.length;
+  var best = Math.max.apply(null,scores);
+  var worst = Math.min.apply(null,scores);
+  var trend = scores.length>=2?(scores[0]-scores[1]):null;
+  var tStr = trend===null?'Primera eval':trend>0?'▲ +'+trend.toFixed(1)+'%':trend<0?'▼ '+trend.toFixed(1)+'%':'→ Igual';
+  var tCls = trend===null?'':'trend-'+(trend>0?'up':trend<0?'dn':'eq');
+  document.getElementById('hist-stats').innerHTML =
+    '<div class="stat-box"><div class="sv">'+avg.toFixed(0)+'%</div><div class="sl">Promedio</div></div>'+
+    '<div class="stat-box"><div class="sv" style="color:#10B981">'+best.toFixed(0)+'%</div><div class="sl">Mejor</div></div>'+
+    '<div class="stat-box"><div class="sv '+tCls+'">'+tStr+'</div><div class="sl">Tendencia</div></div>';
+  // Draw chart
+  drawHistChart(sessions);
+  // Session cards
+  document.getElementById('hist-sessions').innerHTML = sessions.map(function(s,i){
+    var d = new Date(s.fecha+'T12:00:00');
+    var fd = d.toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'});
+    var sc = s.finalScore!==null?s.finalScore.toFixed(0)+'%':'—';
+    var cls = s.finalScore>=75?'g':s.finalScore>=50?'y':'r';
+    var sig = s.sigAsesor?'✍️ ':'';
+    var b1 = s.b1Score!==null?s.b1Score.toFixed(0)+'%':'—';
+    var b2 = s.b2Score!==null?s.b2Score.toFixed(0)+'%':'—';
+    return '<div class="tl-card" onclick="viewSavedSession('+s.id+')">' +
+      '<div><div style="font-size:13px;font-weight:600">'+sig+fd+' · Sem '+s.week+'</div>'+
+      '<div class="tl-date">Presentación: '+b1+' · Jornada: '+b2+' · '+(s.selBrands&&s.selBrands.length||0)+' marcas</div></div>'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+      '<span class="badge '+cls+'" style="font-size:14px;padding:4px 10px">'+sc+'</span>'+
+      '<button class="icon-btn" onclick="event.stopPropagation();exportSinglePDF('+s.id+')" style="font-size:11px;padding:4px 7px">📄</button>'+
+      '</div></div>';
+  }).join('');
+}
+
+function drawHistChart(sessions){
+  var cv = document.getElementById('hist-chart');
+  if(!cv) return;
+  var parent = cv.parentElement;
+  cv.width = parent.offsetWidth - 24;
+  cv.height = 180;
+  var ctx = cv.getContext('2d');
+  ctx.clearRect(0,0,cv.width,cv.height);
+  var W=cv.width, H=cv.height;
+  var pad={top:20,right:16,bottom:36,left:36};
+  var dw=W-pad.left-pad.right, dh=H-pad.top-pad.bottom;
+  // Reversed so oldest left, newest right
+  var data = sessions.slice().reverse();
+  var scores = data.map(function(s){return s.finalScore||0;});
+  var n = scores.length;
+  // Color bands
+  ctx.fillStyle='#D1FAE5'; ctx.fillRect(pad.left, pad.top+dh*(1-1), dw, dh*0.25); // 75-100 green
+  ctx.fillStyle='#FEF3C7'; ctx.fillRect(pad.left, pad.top+dh*0.25, dw, dh*0.25); // 50-75 yellow
+  ctx.fillStyle='#FEE2E2'; ctx.fillRect(pad.left, pad.top+dh*0.5, dw, dh*0.5);   // 0-50 red
+  // Grid lines + labels
+  ctx.strokeStyle='rgba(0,0,0,.1)'; ctx.lineWidth=0.5;
+  [100,75,50,25,0].forEach(function(v){
+    var y = pad.top + dh*(1-v/100);
+    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();
+    ctx.fillStyle='#999';ctx.font='9px sans-serif';ctx.textAlign='right';
+    ctx.fillText(v+'%',pad.left-4,y+3);
+  });
+  // X labels
+  ctx.fillStyle='#999';ctx.font='9px sans-serif';ctx.textAlign='center';
+  data.forEach(function(s,i){
+    var x = n===1?pad.left+dw/2:pad.left+i*(dw/(n-1));
+    var d = new Date(s.fecha+'T12:00:00');
+    var lbl = d.toLocaleDateString('es-CO',{day:'numeric',month:'short'});
+    ctx.fillText(lbl, x, H-pad.bottom+14);
+  });
+  if(n<2){
+    // Single point
+    var x=pad.left+dw/2, y=pad.top+dh*(1-scores[0]/100);
+    ctx.beginPath();ctx.arc(x,y,6,0,Math.PI*2);
+    ctx.fillStyle='#1A1A1A';ctx.fill();
+    ctx.fillStyle='#1A1A1A';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(scores[0].toFixed(0)+'%',x,y-10);
+    return;
+  }
+  // Line
+  ctx.beginPath();ctx.strokeStyle='#1A1A1A';ctx.lineWidth=2.5;ctx.lineJoin='round';
+  scores.forEach(function(v,i){
+    var x=pad.left+i*(dw/(n-1)), y=pad.top+dh*(1-v/100);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  // Fill under line
+  ctx.beginPath();
+  scores.forEach(function(v,i){
+    var x=pad.left+i*(dw/(n-1)), y=pad.top+dh*(1-v/100);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.lineTo(pad.left+dw,pad.top+dh);ctx.lineTo(pad.left,pad.top+dh);ctx.closePath();
+  ctx.fillStyle='rgba(26,26,26,.08)';ctx.fill();
+  // Dots + labels
+  scores.forEach(function(v,i){
+    var x=pad.left+i*(dw/(n-1)), y=pad.top+dh*(1-v/100);
+    ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
+    ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#1A1A1A';ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle='#1A1A1A';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+    ctx.fillText(v.toFixed(0)+'%',x,y-10);
+  });
+}
+
+function exportSinglePDF(id){
+  var sess = getSessions().find(function(s){return s.id===id;});
+  if(!sess) return;
+  S={asesor:sess.asesor,fecha:sess.fecha,evaluador:sess.evaluador,b1:sess.b1Data||{},b2:sess.b2Data||{},selBrands:sess.selBrands||[]};
+  currentViewSess = sess;
+  exportPDF(sess);
+}
+
+function exportHistPDF(){
+  try{
+    var jspdf=window.jspdf;
+    var doc=new jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    var W=210,M=13,CW=W-M*2;
+    var PC=[26,26,26],GR=[100,100,100],LG=[245,245,245];
+    var sessions=getSessions().filter(function(s){return s.asesor===currentHistAsesor;});
+    sessions.sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
+    var scores=sessions.map(function(s){return s.finalScore||0;});
+    var avg=scores.length?scores.reduce(function(a,b){return a+b;},0)/scores.length:0;
+    var best=scores.length?Math.max.apply(null,scores):0;
+    var worst=scores.length?Math.min.apply(null,scores):0;
+    // Header
+    doc.setFillColor(PC[0],PC[1],PC[2]);doc.rect(0,0,W,24,'F');
+    doc.addImage(LOGO_JS,'PNG',M,2,22,16);
+    doc.setTextColor(255,255,255);doc.setFontSize(12);doc.setFont('helvetica','bold');
+    doc.text('MALVA — Historial de Asesor',M+26,10);
+    doc.setFontSize(9);doc.setFont('helvetica','normal');
+    doc.text(currentHistAsesor,M+26,17);
+    var y=28;
+    // Stats
+    doc.setFillColor(LG[0],LG[1],LG[2]);doc.roundedRect(M,y,CW,18,2,2,'F');
+    doc.setTextColor(PC[0],PC[1],PC[2]);doc.setFontSize(9);doc.setFont('helvetica','bold');
+    doc.text('Promedio: '+avg.toFixed(0)+'%',M+4,y+7);
+    doc.text('Mejor: '+best.toFixed(0)+'%',M+CW/3,y+7);
+    doc.text('Evaluaciones: '+sessions.length,M+CW*2/3,y+7);
+    doc.setFont('helvetica','normal');doc.setTextColor(GR[0],GR[1],GR[2]);
+    var trend=scores.length>=2?(scores[0]-scores[scores.length-1]):null;
+    doc.text('Tendencia general: '+(trend===null?'—':trend>0?'▲ Mejorando':trend<0?'▼ Bajando':'→ Estable'),M+4,y+14);
+    y+=22;
+    // Sessions table
+    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(PC[0],PC[1],PC[2]);
+    doc.text('Detalle de Sesiones',M,y+4);y+=7;
+    var rows=sessions.map(function(s){
+      var d=new Date(s.fecha+'T12:00:00');
+      var fd=d.toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'});
+      return[fd,'Sem '+s.week,s.b1Score!==null?s.b1Score.toFixed(0)+'%':'—',s.b2Score!==null?s.b2Score.toFixed(0)+'%':'—',s.finalScore!==null?s.finalScore.toFixed(0)+'%':'—',(s.selBrands&&s.selBrands.length||0)+' marcas'];
+    });
+    doc.autoTable({startY:y,margin:{left:M,right:M},
+      head:[['Fecha','Semana','Presentación','Jornada','Final','Marcas']],
+      body:rows,
+      styles:{fontSize:9,cellPadding:3},
+      headStyles:{fillColor:PC,textColor:255,fontStyle:'bold'},
+      alternateRowStyles:{fillColor:LG},
+      columnStyles:{4:{fontStyle:'bold'}}});
+    var blob=doc.output('blob');var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');a.href=url;a.target='_blank';
+    a.download='MALVA_Historial_'+currentHistAsesor.replace(/\s+/g,'_')+'.pdf';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);document.body.removeChild(a);},2000);
+  }catch(e){showToast('Error PDF: '+e.message);}
+}
+
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 </script>
+
+<!-- HISTORY SCREEN -->
+<div id="sc-hist" style="display:none">
+  <div class="main" style="padding-top:14px">
+    <div class="card">
+      <div class="ct" id="hist-title">📈 Historial del Asesor</div>
+      <div class="stats-grid" id="hist-stats"></div>
+      <div class="chart-wrap">
+        <div class="chart-title">Puntaje por sesión</div>
+        <canvas id="hist-chart" style="width:100%;height:180px"></canvas>
+      </div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--TXL);margin-bottom:8px">Todas las sesiones</div>
+      <div id="hist-sessions"></div>
+    </div>
+    <button class="btn btn-pdf" onclick="exportHistPDF()">📄 Exportar Historial PDF</button>
+    <button class="btn btn-s" onclick="volverInicio()">↩ Volver</button>
+    <div style="height:20px"></div>
+  </div>
+</div>
 </body>
 </html>
