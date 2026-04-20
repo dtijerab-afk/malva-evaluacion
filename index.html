@@ -491,27 +491,41 @@ function buildInfoCard(){
 
 // ── BLOQUE 1 ──
 function buildB1(){
-  document.getElementById('b1items').innerHTML=B1.map(item=>
-    '<div class="er"><span class="el">'+item+'</span>'+
-    '<div class="tg" id="tg1_'+eid(item)+'">'+makeTG(item,'b1')+'</div></div>'
-  ).join('');
+  document.getElementById('b1items').innerHTML=B1.map(function(item,ki){
+    return '<div class="er"><span class="el">'+item+'</span>'+
+    '<div class="tg" id="tg1_'+ki+'">'+makeTG(item,'b1')+'</div></div>';
+  }).join('');
 }
 function eid(s){return s.replace(/[^a-zA-Z0-9]/g,'_');}
 function makeTG(key,block,brand){
-  const cur=block==='b1'?S.b1[key]:S.b2[brand]?.items[key];
-  return['0','1','2','NA'].map(function(v){
+  const cur=block==='b1'?S.b1[key]:(S.b2[brand]&&S.b2[brand].items[key]);
+  const vals=['0','1','2','NA'];
+  return vals.map(function(v){
     const cls=cur===v?(v==='NA'?'ana':'a'+v):'';
-    const fn=block==='b1'?'setB1("'+eid(key)+'","'+v+'")':'setB2("'+eid(brand)+'","'+eid(key)+'","'+v+'")';
-    return'<button class="tb '+cls+'" onclick="'+fn+'">'+v+'</button>';
+    const attr='data-block="'+block+'" data-key="'+key.replace(/"/g,'&quot;')+'"'+(brand?' data-brand="'+brand.replace(/"/g,'&quot;')+'"':'')+' data-val="'+v+'"';
+    return '<button class="tb '+cls+'" '+attr+' onclick="handleTB(this)">'+v+'</button>';
   }).join('');
 }
-function setB1(eitem,val){
-  const real=B1.find(x=>eid(x)===eitem)||eitem;
-  if(S.b1[real]===val)delete S.b1[real];else S.b1[real]=val;
-  const tg=document.getElementById('tg1_'+eid(real));
-  if(tg)tg.innerHTML=makeTG(real,'b1');
-  updateScores();
+function handleTB(btn){
+  var block=btn.getAttribute('data-block');
+  var key=btn.getAttribute('data-key');
+  var val=btn.getAttribute('data-val');
+  var brand=btn.getAttribute('data-brand');
+  if(block==='b1'){
+    if(S.b1[key]===val)delete S.b1[key];else S.b1[key]=val;
+    var tg=btn.parentElement;if(tg)tg.innerHTML=makeTG(key,'b1');
+    updateScores();
+  } else {
+    var d=S.b2[brand];if(!d)return;
+    if(d.items[key]===val)delete d.items[key];else d.items[key]=val;
+    var si=S.selBrands.indexOf(brand);
+    var tg2=btn.parentElement;if(tg2)tg2.innerHTML=makeTG(key,'b2',brand);
+    refreshBadge(brand,si);
+    var bc=document.getElementById('bc'+si);if(bc)bc.classList.toggle('touched',Object.keys(d.items).length>0);
+    updateScores();
+  }
 }
+function setB1(eitem,val){}
 
 // ── BLOQUE 2 ──
 function buildB2(){
@@ -535,20 +549,7 @@ function brandHTML(brand,idx){
 }
 function setObs(idx,val){const b=S.selBrands[idx];if(b&&S.b2[b])S.b2[b].obs=val;}
 function toggleBrand(idx){document.getElementById('bd'+idx).classList.toggle('open');document.getElementById('chev'+idx).classList.toggle('op');}
-function setB2(ebrand,eitem,val){
-  const brand=S.selBrands.find(b=>eid(b)===ebrand)||ebrand;
-  const idx=B2.findIndex(x=>eid(x)===eitem);
-  if(idx<0)return;
-  const item=B2[idx];
-  const d=S.b2[brand];if(!d)return;
-  if(d.items[item]===val)delete d.items[item];else d.items[item]=val;
-  const si=S.selBrands.indexOf(brand);
-  const tg=document.getElementById('tg2_'+si+'_'+idx);
-  if(tg)tg.innerHTML=makeTG(item,'b2',brand);
-  refreshBadge(brand,si);
-  document.getElementById('bc'+si)?.classList.toggle('touched',Object.keys(d.items).length>0);
-  updateScores();
-}
+function setB2(){}
 function refreshBadge(brand,idx){
   const pct=calcBrandPct(brand);
   const bbs=document.querySelector('#bc'+idx+' .bb');if(!bbs)return;
