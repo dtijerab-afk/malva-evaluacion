@@ -216,8 +216,8 @@ canvas.sc{display:block;touch-action:none;cursor:crosshair;width:100%;height:120
       <button class="btn btn-rep" onclick="goReport()" style="margin-top:8px">Ver Reporte Completo →</button>
     </div>
     <div class="card">
-      <div class="ct">🗓️ Evaluaciones Guardadas</div>
-      <div id="sessions-list"><div class="empty">Aún no hay evaluaciones guardadas.</div></div>
+      <div class="ct">📋 Historial</div>
+      <button class="btn btn-p" onclick="goHistorial()" style="margin-bottom:0">Ver Historial de Asesores →</button>
     </div>
   </div>
 </div>
@@ -730,6 +730,7 @@ function weekNum(dateStr){const d=new Date(dateStr+'T12:00:00');const day=d.getD
 function renderSessions(){
   const sessions=getSessions().slice().reverse();
   const c=document.getElementById('sessions-list');
+  if(!c) return; // element removed from home
   if(!sessions.length){c.innerHTML='<div class="empty">Aún no hay evaluaciones guardadas.</div>';return;}
   c.innerHTML=sessions.map(function(s){
     const d=new Date(s.fecha+'T12:00:00');
@@ -996,6 +997,20 @@ function exportReportPDF(){
 // ── HISTORY ──
 var currentHistAsesor = '';
 
+async function deleteSessFromHist(id){
+  if(!confirm('¿Eliminar esta evaluación?'))return;
+  await deleteFromSupabase(id);
+  renderSessions();renderReportPreview();
+  // Refresh history view
+  renderHist(currentHistAsesor);
+  // If no more sessions for this asesor, go home
+  var remaining=getSessions().filter(function(s){return s.asesor===currentHistAsesor;});
+  if(!remaining.length) volverInicio();
+}
+function openHistByAttr(el){
+  var asesor=el.getAttribute('data-asesor');
+  if(asesor) openHist(asesor);
+}
 function openHistById(id){
   var sess=getSessions().find(function(s){return s.id===id;});
   if(sess) openHist(sess.asesor);
@@ -1043,6 +1058,7 @@ function renderHist(asesor){
       '<div style="display:flex;gap:6px;align-items:center">'+
       '<span class="badge '+cls+'" style="font-size:14px;padding:4px 10px">'+sc+'</span>'+
       '<button class="icon-btn" onclick="event.stopPropagation();exportSinglePDF('+s.id+')" style="font-size:11px;padding:4px 7px">📄</button>'+
+      '<button class="icon-btn" onclick="event.stopPropagation();deleteSessFromHist('+s.id+')" style="font-size:11px;padding:4px 7px" title="Eliminar">🗑</button>'+
       '</div></div>';
   }).join('');
 }
@@ -1051,28 +1067,40 @@ function drawHistChart(sessions){
   var cv = document.getElementById('hist-chart');
   if(!cv) return;
   var parent = cv.parentElement;
-  cv.width = parent.offsetWidth - 24;
-  cv.height = 180;
+  var dpr = window.devicePixelRatio || 1;
+  var cssW = parent.offsetWidth - 24;
+  var cssH = 200;
+  cv.style.width = cssW + 'px';
+  cv.style.height = cssH + 'px';
+  cv.width = cssW * dpr;
+  cv.height = cssH * dpr;
   var ctx = cv.getContext('2d');
-  ctx.clearRect(0,0,cv.width,cv.height);
-  var W=cv.width, H=cv.height;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0,0,cssW,cssH);
+  var W=cssW, H=cssH;
   var pad={top:20,right:16,bottom:36,left:36};
   var dw=W-pad.left-pad.right, dh=H-pad.top-pad.bottom;
   // Reversed so oldest left, newest right
   var data = sessions.slice().reverse();
   var scores = data.map(function(s){return s.finalScore||0;});
   var n = scores.length;
-  // Color bands
-  ctx.fillStyle='#D1FAE5'; ctx.fillRect(pad.left, pad.top+dh*(1-1), dw, dh*0.25); // 75-100 green
-  ctx.fillStyle='#FEF3C7'; ctx.fillRect(pad.left, pad.top+dh*0.25, dw, dh*0.25); // 50-75 yellow
-  ctx.fillStyle='#FEE2E2'; ctx.fillRect(pad.left, pad.top+dh*0.5, dw, dh*0.5);   // 0-50 red
+  // Color bands with border radius simulation
+  ctx.fillStyle='rgba(16,185,129,.12)'; ctx.fillRect(pad.left, pad.top, dw, dh*0.25); // 75-100 green
+  ctx.fillStyle='rgba(245,158,11,.10)'; ctx.fillRect(pad.left, pad.top+dh*0.25, dw, dh*0.25); // 50-75 yellow
+  ctx.fillStyle='rgba(239,68,68,.10)'; ctx.fillRect(pad.left, pad.top+dh*0.5, dw, dh*0.5);   // 0-50 red
+  // Band labels
+  ctx.font='bold 9px sans-serif'; ctx.textAlign='left';
+  ctx.fillStyle='rgba(16,185,129,.6)'; ctx.fillText('EXCELENTE',pad.left+4,pad.top+10);
+  ctx.fillStyle='rgba(180,120,0,.5)'; ctx.fillText('ACEPTABLE',pad.left+4,pad.top+dh*0.25+10);
+  ctx.fillStyle='rgba(200,50,50,.5)'; ctx.fillText('CRÍTICO',pad.left+4,pad.top+dh*0.5+10);
   // Grid lines + labels
-  ctx.strokeStyle='rgba(0,0,0,.1)'; ctx.lineWidth=0.5;
   [100,75,50,25,0].forEach(function(v){
-    var y = pad.top + dh*(1-v/100);
-    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();
-    ctx.fillStyle='#999';ctx.font='9px sans-serif';ctx.textAlign='right';
-    ctx.fillText(v+'%',pad.left-4,y+3);
+    var gy = pad.top + dh*(1-v/100);
+    ctx.beginPath();ctx.strokeStyle=v%25===0?'rgba(0,0,0,.15)':'rgba(0,0,0,.06)';
+    ctx.lineWidth=v===75||v===50?1:0.5; ctx.setLineDash(v===100||v===0?[]:[4,4]);
+    ctx.moveTo(pad.left,gy);ctx.lineTo(W-pad.right,gy);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#888';ctx.font='bold 9px sans-serif';ctx.textAlign='right';
+    ctx.fillText(v+'%',pad.left-4,gy+3);
   });
   // X labels
   ctx.fillStyle='#999';ctx.font='9px sans-serif';ctx.textAlign='center';
@@ -1092,7 +1120,7 @@ function drawHistChart(sessions){
     return;
   }
   // Line
-  ctx.beginPath();ctx.strokeStyle='#1A1A1A';ctx.lineWidth=2.5;ctx.lineJoin='round';
+  ctx.beginPath();ctx.strokeStyle='#1A1A1A';ctx.lineWidth=3;ctx.lineJoin='round';ctx.lineCap='round';
   scores.forEach(function(v,i){
     var x=pad.left+i*(dw/(n-1)), y=pad.top+dh*(1-v/100);
     i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
@@ -1105,14 +1133,22 @@ function drawHistChart(sessions){
     i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
   });
   ctx.lineTo(pad.left+dw,pad.top+dh);ctx.lineTo(pad.left,pad.top+dh);ctx.closePath();
-  ctx.fillStyle='rgba(26,26,26,.08)';ctx.fill();
+  // Gradient fill
+  var grad=ctx.createLinearGradient(0,pad.top,0,pad.top+dh);
+  grad.addColorStop(0,'rgba(26,26,26,.15)');grad.addColorStop(1,'rgba(26,26,26,.01)');
+  ctx.fillStyle=grad;ctx.fill();
   // Dots + labels
   scores.forEach(function(v,i){
     var x=pad.left+i*(dw/(n-1)), y=pad.top+dh*(1-v/100);
-    ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
-    ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#1A1A1A';ctx.lineWidth=2;ctx.stroke();
-    ctx.fillStyle='#1A1A1A';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
-    ctx.fillText(v.toFixed(0)+'%',x,y-10);
+    // Score color for dot
+    var dotColor=v>=75?'#10B981':v>=50?'#F59E0B':'#EF4444';
+    ctx.beginPath();ctx.arc(x,y,6,0,Math.PI*2);
+    ctx.fillStyle=dotColor;ctx.fill();
+    ctx.beginPath();ctx.arc(x,y,6,0,Math.PI*2);
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+    // Label bubble
+    ctx.fillStyle='#1A1A1A';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(v.toFixed(0)+'%',x,y-12);
   });
 }
 
@@ -1177,6 +1213,68 @@ function exportHistPDF(){
   }catch(e){showToast('Error PDF: '+e.message);}
 }
 
+
+function goHistorial(){
+  buildHistMesFilter();
+  renderHistList();
+  showScreen('sc-hist-list');
+}
+
+function buildHistMesFilter(){
+  var sessions=getSessions();
+  var meses=[...new Set(sessions.map(function(s){return s.month;}))].sort().reverse();
+  var sel=document.getElementById('hist-mes-filter');
+  if(!sel)return;
+  sel.innerHTML='<option value="">— Todos los meses —</option>'+meses.map(function(m){
+    var parts=m.split('-');
+    var name=new Date(Number(parts[0]),Number(parts[1])-1,1).toLocaleDateString('es-CO',{month:'long',year:'numeric'});
+    return'<option value="'+m+'">'+name.charAt(0).toUpperCase()+name.slice(1)+'</option>';
+  }).join('');
+}
+
+function renderHistList(){
+  var mes=document.getElementById('hist-mes-filter');
+  var mesVal=mes?mes.value:'';
+  var sessions=getSessions();
+  if(mesVal) sessions=sessions.filter(function(s){return s.month===mesVal;});
+  var byA={};
+  sessions.forEach(function(s){
+    var key=s.asesor.trim().toLowerCase();
+    if(!byA[key]) byA[key]={nombre:s.asesor.trim(),evals:[]};
+    byA[key].evals.push(s);
+  });
+  var c=document.getElementById('hist-asesor-list');
+  if(!c)return;
+  if(!Object.keys(byA).length){c.innerHTML='<div class="empty">Sin evaluaciones para este período.</div>';return;}
+  var sorted=Object.values(byA).sort(function(a,b){return a.nombre.localeCompare(b.nombre);});
+  c.innerHTML=sorted.map(function(item){
+    var evals=item.evals;
+    evals.sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
+    var scores=evals.map(function(e){return e.finalScore||0;});
+    var avg=scores.reduce(function(a,b){return a+b;},0)/scores.length;
+    var trend=scores.length>=2?(scores[0]-scores[1]):null;
+    var tStr=trend===null?'Primera evaluación':trend>0?'▲ +'+Math.abs(trend).toFixed(0)+'%':trend<0?'▼ -'+Math.abs(trend).toFixed(0)+'%':'→ Sin cambio';
+    var tCls=trend===null?'':'trend-'+(trend>0?'up':trend<0?'dn':'eq');
+    var cls=avg>=75?'g':avg>=50?'y':'r';
+    var lastDate=new Date(evals[0].fecha+'T12:00:00').toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'});
+        return'<div class="hist-asesor-card" data-asesor="'+item.nombre.replace(/"/g,'&quot;')+'" onclick="openHistByAttr(this)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center">'+
+      '<div>'+
+      '<div class="ha-name">'+item.nombre+'</div>'+
+      '<div class="ha-meta">'+evals.length+' sesión'+(evals.length>1?'es':'')+' · Última: '+lastDate+'</div>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+      '<span class="badge '+cls+'" style="font-size:14px;padding:4px 10px">'+avg.toFixed(0)+'%</span>'+
+      '<span style="font-size:20px;color:#999;font-weight:300">›</span>'+
+      '</div>'+
+      '</div>'+
+      '<div style="font-size:11px;margin-top:6px;padding-top:6px;border-top:1px solid var(--BG)">'+
+      '<span class="'+tCls+'">'+tStr+'</span>'+
+      '</div>'+
+      '</div>';
+  }).join('');
+}
+
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 </script>
 
@@ -1194,6 +1292,24 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
       <div id="hist-sessions"></div>
     </div>
     <button class="btn btn-pdf" onclick="exportHistPDF()">📄 Exportar Historial PDF</button>
+    <button class="btn btn-s" onclick="goHistorial()">↩ Volver al Historial</button>
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- HISTORIAL LIST SCREEN -->
+<div id="sc-hist-list" style="display:none">
+  <div class="main" style="padding-top:14px">
+    <div class="card">
+      <div class="ct">📋 Historial de Asesores</div>
+      <div class="fl" style="margin-bottom:12px">
+        <label>Filtrar por Mes</label>
+        <select id="hist-mes-filter" onchange="renderHistList()">
+          <option value="">— Todos los meses —</option>
+        </select>
+      </div>
+      <div id="hist-asesor-list"><div class="empty">Cargando...</div></div>
+    </div>
     <button class="btn btn-s" onclick="volverInicio()">↩ Volver</button>
     <div style="height:20px"></div>
   </div>
