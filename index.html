@@ -4,6 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>MALVA — Evaluación de Asesores</title>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -340,67 +342,74 @@ canvas.sc{display:block;touch-action:none;cursor:crosshair;width:100%;height:120
 
 <script>
 
-const SUPABASE_URL='https://nilammwpyurhlqvrfwmb.supabase.co';
-const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pbGFtbXdweXVyaGxxdnJmd21iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MzIwMTIsImV4cCI6MjA5MjIwODAxMn0.mjzCDih22bWM4MbiSg5TEztV6Xm6Uh2eA6a_QBSbb2k';
+// Firebase
+firebase.initializeApp({
+  apiKey: "AIzaSyDaUegcGuCzRXdro3akqpFFN-cNploVs-E",
+  authDomain: "malva-evaluacion.firebaseapp.com",
+  projectId: "malva-evaluacion",
+  storageBucket: "malva-evaluacion.firebasestorage.app",
+  messagingSenderId: "223572518464",
+  appId: "1:223572518464:web:0844e9b4b05c5f414661a5"
+});
+const db=firebase.firestore();
+const COL='evaluaciones';
 let cachedSessions=[];
 
-async function sbFetch(path,method,body){
-  const opts={method:method||'GET',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=representation'}};
-  if(body)opts.body=JSON.stringify(body);
-  try{
-    const r=await fetch(SUPABASE_URL+path,opts);
-    if(!r.ok)return null;
-    const txt=await r.text();return txt?JSON.parse(txt):[];
-  }catch(e){return null;}
-}
-
-function setSyncDot(state){
+async function setSyncDot(state){
   const d=document.getElementById('sync-dot');if(!d)return;
   d.style.background=state==='ok'?'#10B981':state==='error'?'#EF4444':'#F59E0B';
-  d.title=state==='ok'?'Sincronizado':state==='error'?'Sin conexión':'Sincronizando...';
+  d.title=state==='ok'?'Firebase OK':state==='error'?'Sin conexion':'Sincronizando...';
 }
 
 async function loadSessions(){
   setSyncDot('syncing');
-  const data=await sbFetch('/rest/v1/malva_evaluaciones?select=*&order=created_at.desc');
-  if(data&&Array.isArray(data)){
-    cachedSessions=data.map(r=>({
-      id:r.id,asesor:r.asesor,fecha:r.fecha,evaluador:r.evaluador,
-      b1Score:r.b1_score,b2Score:r.b2_score,finalScore:r.final_score,
-      b1Data:r.b1_data||{},b2Data:r.b2_data||{},selBrands:r.sel_brands||[],
-      week:r.week,month:r.month,sigAsesor:r.sig_asesor||'',sigEvaluador:r.sig_evaluador||''
-    }));
+  try{
+    const snap=await db.collection(COL).orderBy('created_at','desc').get();
+    cachedSessions=snap.docs.map(function(d){
+      var r=d.data();
+      return{id:r.id,asesor:r.asesor,fecha:r.fecha,evaluador:r.evaluador,
+        b1Score:r.b1Score,b2Score:r.b2Score,finalScore:r.finalScore,
+        b1Data:r.b1Data||{},b2Data:r.b2Data||{},selBrands:r.selBrands||[],
+        week:r.week,month:r.month,sigAsesor:r.sigAsesor||'',sigEvaluador:r.sigEvaluador||'',
+        fireId:d.id};
+    });
     localStorage.setItem('malva_sessions',JSON.stringify(cachedSessions));
     setSyncDot('ok');
-  }else{
-    try{cachedSessions=JSON.parse(localStorage.getItem('malva_sessions')||'[]');}catch(e){cachedSessions=[];}
+  }catch(e){
+    console.error('Firebase:',e);
+    try{cachedSessions=JSON.parse(localStorage.getItem('malva_sessions')||'[]');}catch(ex){cachedSessions=[];}
     setSyncDot('error');
   }
   renderSessions();renderReportPreview();
 }
 
 async function saveToSupabase(session){
-  const row={id:session.id,asesor:session.asesor,fecha:session.fecha,evaluador:session.evaluador,b1_score:session.b1Score,b2_score:session.b2Score,final_score:session.finalScore,b1_data:session.b1Data,b2_data:session.b2Data,sel_brands:session.selBrands,week:session.week,month:session.month,sig_asesor:session.sigAsesor,sig_evaluador:session.sigEvaluador};
   setSyncDot('syncing');
-  const ok=await sbFetch('/rest/v1/malva_evaluaciones','POST',row);
-  setSyncDot(ok!==null?'ok':'error');
-  return ok!==null;
+  try{
+    const data={id:session.id,asesor:session.asesor,fecha:session.fecha,evaluador:session.evaluador,
+      b1Score:session.b1Score,b2Score:session.b2Score,finalScore:session.finalScore,
+      b1Data:session.b1Data,b2Data:session.b2Data,selBrands:session.selBrands,
+      week:session.week,month:session.month,
+      sigAsesor:session.sigAsesor,sigEvaluador:session.sigEvaluador,
+      created_at:firebase.firestore.FieldValue.serverTimestamp()};
+    const ref=await db.collection(COL).add(data);
+    session.fireId=ref.id;
+    setSyncDot('ok');return true;
+  }catch(e){console.error('Firebase save:',e);setSyncDot('error');return false;}
 }
 
 async function deleteFromSupabase(id){
   setSyncDot('syncing');
-  await sbFetch('/rest/v1/malva_evaluaciones?id=eq.'+id,'DELETE');
-  setSyncDot('ok');
-}
-
-const ASESORES={
-  "CAMILO ARGEL":["ADRIANA CONTRERAS","AGUA COCO","ALGODON Y COCO","AMARANTE","CASA AZUCENA","CASA AZUCENA KT","FOR PUBLIC DISPLAY","GUILLERMO CASTRO","KIBYS","LA VI BY MAJO","LA VIE","LUNIA","MUSEE THE BRAND","SEA SALT","SEA SALT KT","VEMOC","WAYA ARTESANIAS SAS","ZALVA"],
-  "HELEN CEPEDA":["A MODO MIO","A MODO MIO KT","COMMON AREA KT","FARM RIO KT","FLOW","FLOW KT","FRANCQUES","JULIAMAR","LA OBRA DE ARTE SOY YO","LA OBRA DE ARTE SOY YO KT","MATILDA","MAYORGA","MICHELLE DACCARETT","MOCHILA MARKET","NOT A UNIFORM","NOT A UNIFORM KT","PADOVA","SUNSET","ZIERRA LEONA","ZIERRA LEONA KT","BROWNIE"],
-  "JESSICA DE LOS RIOS":["AC SHOES MAN","AGUEL","ALEJANDRO DE LA ROSA","ARGEMIRO SIERRA","BASSTO","BLUE BANANA KT","CEREAL","COOLWAY KT","DOS COSTAS","EL GANSO KT","FRANCESCA MIRANDA HOMBRE","GLEE","GOLDEN GOOSE KT","GOORIN BROS","GOORIN BROS KT","HOFF KT","JUAN SILVESTRE","LAZO","LUGO","MARINI STAR","NO DRAMA KT","ON RUNNING","ON RUNNING KT","PAPATTUS","PARDO","REMANENCE","SCALPERS","TRUE","UNO A UNO","VISTETE DE COLOMBIA","VISTETE DE COLOMBIA KT"],
-  "KATHERINE CHOPERENA":["APPLOD","BENEDETTA","BLESS","CASABELA","ENCANTADORE KT","JOHANNA ISAAC FADUL","MALAI","MILONGA","ONDA DE MAR KT","ONDADEMAR","WE ARE PROJECT","MICHU KT","ODM"],
-  "LEANYS CARDONA":["ADIDAS KT","ADIDAS","ALMA AZUL","ALMA EN PENA KT","ALOHAS KT","ALTA SHOES","AUTRY KT","FLABELUS KT","GARCES BOTTIER","GRACIA SHOES","LAURA CEPEDA","MATERGEA","MULATT","MULATT KT","NEW BALANCE KT","P448","PATRICIA MEJIA","PATRICIA MEJIA KT","SCHUTZ KT","THE FOUNDRY KT","VALARUZO","VEJA KT"],
-  "LISETH ROMERO":["STERING","A-FUN SOCKS TOK KT","ADIDAS TOK KT","AGUA D BELEN TOK","ALEXANDRABUENO TOK","AMANI","ANIMA","BABY CLASSIC TOK KT","BIMBIDREAMS TOK","BLUE BANANA TOK KT","CANDELIERI","CIGOTO TOK KT","COBAG LIBROS","CROCS TOK","DOS OJOS TOK","EN TELA TOK","IGOR","IGOR TOK KT","JOLIE TOK","JOY HUNTERS TOK KT","JULIAN EN HILOS","KRONOTIME","LA POMPONETTE TOK","LACE IT UP KT","LAPU TOK KT","LOBSTER MINI TOK KT","LPG TOK","MALVA ACCESORIES KT","MIJAL GLEISER","MISKHY","MR.BOHO","NIPSKIN","NIXON","NVO MONERIA TOK","ON RUNNING TOK KT","OQUI TOK","PAULA MENDOZA KT","PEPITA Y ME","QUAKQUAK TOK","RAINBOW RIDERS TOK KT","RAYITO DE SOL TOK","RELICARIO KIDS TOK","ROMEO KIDS TOK KT","SAN BABY TOK KT","SENDA","STERLING","TED BAKER","THE HAIR GENERATION","THE SOCKCIETY KT","TRES OVEJAS TOK KT","UKELE TOK KT","VAST TOK KT","VEJA TOK KT","WOMA"],
-  "MARIA ALEJANDRA DE LA CRUZ":["ALITZA GARCIA","AMI PARIS KT","ANCA RAVELO","ANDREA LANDA KT","ANDRES OTALORA KT","ARIAL 12","CULT GAIA KT","DIVINA CASTIDAD","ESPECIA","GANNI","ISABEL MARANT KT","JACQUEMUS","JONATHAN SIMKHAI KT","JORGE DUQUE KT","LEGADO","MARIA ELENA VILLAMIL KT","MICHU","OLGA BERG KT","PAJARO LIMON","PAMELA STEVENSON","PAMELA STEVENSON KT","PEPA POMBO KT","PINKO","SILVIA ARAOS KT","VERDI KT","VOIE KT","WAIMARI KT","ZADIG ET VOLTAIRE","ZIMMERMANN KT"]
+  try{
+    const sess=cachedSessions.find(function(s){return s.id===id;});
+    if(sess&&sess.fireId){
+      await db.collection(COL).doc(sess.fireId).delete();
+    } else {
+      const snap=await db.collection(COL).where('id','==',id).get();
+      snap.forEach(function(d){d.ref.delete();});
+    }
+    setSyncDot('ok');
+  }catch(e){console.error('Firebase del:',e);setSyncDot('error');}
 };
 const B1=["Presentación Personal","Limpieza","Higiene Personal","Calzado","Rostro","Planchado"];
 const B2=["Surtido","Limpieza","Planchado","Etiquetado","Pinado","Senalizacion","Tallas"];
