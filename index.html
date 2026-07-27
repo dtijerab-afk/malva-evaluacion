@@ -4,8 +4,6 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>MALVA — Evaluación de Asesores</title>
-<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -340,6 +338,8 @@ canvas.sc{display:block;touch-action:none;cursor:crosshair;width:100%;height:120
 
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 <script>
 
 // Firebase
@@ -420,7 +420,7 @@ let S={asesor:"",fecha:"",evaluador:"",b1:{},b2:{},selBrands:[]};
 let currentViewSess=null;
 
 // ── INIT ──
-(function(){
+window.addEventListener('load',function(){
   document.getElementById('fecha').value=new Date().toISOString().split('T')[0];
   const sel=document.getElementById('asesor-sel');
   Object.keys(ASESORES).sort().forEach(a=>{
@@ -428,11 +428,11 @@ let currentViewSess=null;
   });
   showScreen('sc-home');
   loadSessions();
-})();
+});
 
 // ── SCREENS ──
 function showScreen(id){
-  ['sc-home','sc-select','sc-eval','sc-report','sc-view'].forEach(s=>document.getElementById(s).style.display='none');
+  ['sc-home','sc-select','sc-eval','sc-report','sc-view','sc-hist','sc-hist-list'].forEach(s=>document.getElementById(s).style.display='none');
   document.getElementById(id).style.display='block';
   const showBack=['sc-eval','sc-select','sc-view'].includes(id);
   document.getElementById('btn-back').style.display=showBack?'block':'none';
