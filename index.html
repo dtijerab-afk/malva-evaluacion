@@ -342,17 +342,19 @@ canvas.sc{display:block;touch-action:none;cursor:crosshair;width:100%;height:120
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 <script>
 
-// Firebase
-firebase.initializeApp({
-  apiKey: "AIzaSyDaUegcGuCzRXdro3akqpFFN-cNploVs-E",
-  authDomain: "malva-evaluacion.firebaseapp.com",
-  projectId: "malva-evaluacion",
-  storageBucket: "malva-evaluacion.firebasestorage.app",
-  messagingSenderId: "223572518464",
-  appId: "1:223572518464:web:0844e9b4b05c5f414661a5"
-});
-const db=firebase.firestore();
+// Firebase - initialized in startApp()
+var db=null;
 const COL='evaluaciones';
+
+const ASESORES={
+  "CAMILO ARGEL":["ADRIANA CONTRERAS","AGUA COCO","ALGODON Y COCO","AMARANTE","CASA AZUCENA","CASA AZUCENA KT","FOR PUBLIC DISPLAY","GUILLERMO CASTRO","KIBYS","LA VI BY MAJO","LA VIE","LUNIA","MUSEE THE BRAND","SEA SALT","SEA SALT KT","VEMOC","WAYA ARTESANIAS SAS","ZALVA"],
+  "HELEN CEPEDA":["A MODO MIO","A MODO MIO KT","COMMON AREA KT","FARM RIO KT","FLOW","FLOW KT","FRANCQUES","JULIAMAR","LA OBRA DE ARTE SOY YO","LA OBRA DE ARTE SOY YO KT","MATILDA","MAYORGA","MICHELLE DACCARETT","MOCHILA MARKET","NOT A UNIFORM","NOT A UNIFORM KT","PADOVA","SUNSET","ZIERRA LEONA","ZIERRA LEONA KT","BROWNIE"],
+  "JESSICA DE LOS RIOS":["AC SHOES MAN","AGUEL","ALEJANDRO DE LA ROSA","ARGEMIRO SIERRA","BASSTO","BLUE BANANA KT","CEREAL","COOLWAY KT","DOS COSTAS","EL GANSO KT","FRANCESCA MIRANDA HOMBRE","GLEE","GOLDEN GOOSE KT","GOORIN BROS","GOORIN BROS KT","HOFF KT","JUAN SILVESTRE","LAZO","LUGO","MARINI STAR","NO DRAMA KT","ON RUNNING","ON RUNNING KT","PAPATTUS","PARDO","REMANENCE","SCALPERS","TRUE","UNO A UNO","VISTETE DE COLOMBIA","VISTETE DE COLOMBIA KT"],
+  "KATHERINE CHOPERENA":["APPLOD","BENEDETTA","BLESS","CASABELA","ENCANTADORE KT","JOHANNA ISAAC FADUL","MALAI","MILONGA","ONDA DE MAR KT","ONDADEMAR","WE ARE PROJECT","MICHU KT","ODM"],
+  "LEANYS CARDONA":["ADIDAS KT","ADIDAS","ALMA AZUL","ALMA EN PENA KT","ALOHAS KT","ALTA SHOES","AUTRY KT","FLABELUS KT","GARCES BOTTIER","GRACIA SHOES","LAURA CEPEDA","MATERGEA","MULATT","MULATT KT","NEW BALANCE KT","P448","PATRICIA MEJIA","PATRICIA MEJIA KT","SCHUTZ KT","THE FOUNDRY KT","VALARUZO","VEJA KT"],
+  "LISETH ROMERO":["STERING","A-FUN SOCKS TOK KT","ADIDAS TOK KT","AGUA D BELEN TOK","ALEXANDRABUENO TOK","AMANI","ANIMA","BABY CLASSIC TOK KT","BIMBIDREAMS TOK","BLUE BANANA TOK KT","CANDELIERI","CIGOTO TOK KT","COBAG LIBROS","CROCS TOK","DOS OJOS TOK","EN TELA TOK","IGOR","IGOR TOK KT","JOLIE TOK","JOY HUNTERS TOK KT","JULIAN EN HILOS","KRONOTIME","LA POMPONETTE TOK","LACE IT UP KT","LAPU TOK KT","LOBSTER MINI TOK KT","LPG TOK","MALVA ACCESORIES KT","MIJAL GLEISER","MISKHY","MR.BOHO","NIPSKIN","NIXON","NVO MONERIA TOK","ON RUNNING TOK KT","OQUI TOK","PAULA MENDOZA KT","PEPITA Y ME","QUAKQUAK TOK","RAINBOW RIDERS TOK KT","RAYITO DE SOL TOK","RELICARIO KIDS TOK","ROMEO KIDS TOK KT","SAN BABY TOK KT","SENDA","STERLING","TED BAKER","THE HAIR GENERATION","THE SOCKCIETY KT","TRES OVEJAS TOK KT","UKELE TOK KT","VAST TOK KT","VEJA TOK KT","WOMA"],
+  "MARIA ALEJANDRA DE LA CRUZ":["ALITZA GARCIA","AMI PARIS KT","ANCA RAVELO","ANDREA LANDA KT","ANDRES OTALORA KT","ARIAL 12","CULT GAIA KT","DIVINA CASTIDAD","ESPECIA","GANNI","ISABEL MARANT KT","JACQUEMUS","JONATHAN SIMKHAI KT","JORGE DUQUE KT","LEGADO","MARIA ELENA VILLAMIL KT","MICHU","OLGA BERG KT","PAJARO LIMON","PAMELA STEVENSON","PAMELA STEVENSON KT","PEPA POMBO KT","PINKO","SILVIA ARAOS KT","VERDI KT","VOIE KT","WAIMARI KT","ZADIG ET VOLTAIRE","ZIMMERMANN KT"]
+}
 let cachedSessions=[];
 
 async function setSyncDot(state){
@@ -420,7 +422,25 @@ let S={asesor:"",fecha:"",evaluador:"",b1:{},b2:{},selBrands:[]};
 let currentViewSess=null;
 
 // ── INIT ──
-window.addEventListener('load',function(){
+function startApp(){
+  // Wait for Firebase SDK to be available
+  if(typeof firebase==='undefined'){
+    setTimeout(startApp,100);
+    return;
+  }
+  // Initialize Firebase
+  try{
+    firebase.initializeApp({
+      apiKey: "AIzaSyDaUegcGuCzRXdro3akqpFFN-cNploVs-E",
+      authDomain: "malva-evaluacion.firebaseapp.com",
+      projectId: "malva-evaluacion",
+      storageBucket: "malva-evaluacion.firebasestorage.app",
+      messagingSenderId: "223572518464",
+      appId: "1:223572518464:web:0844e9b4b05c5f414661a5"
+    });
+    db=firebase.firestore();
+  }catch(e){console.error('Firebase init:',e);}
+
   document.getElementById('fecha').value=new Date().toISOString().split('T')[0];
   const sel=document.getElementById('asesor-sel');
   Object.keys(ASESORES).sort().forEach(a=>{
@@ -428,7 +448,12 @@ window.addEventListener('load',function(){
   });
   showScreen('sc-home');
   loadSessions();
-});
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',startApp);
+}else{
+  startApp();
+}
 
 // ── SCREENS ──
 function showScreen(id){
