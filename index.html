@@ -347,71 +347,13 @@ var db=null;
 const COL='evaluaciones';
 
 const ASESORES={
-  "CAMILO ARGEL":["ADRIANA CONTRERAS","AGUA COCO","ALGODON Y COCO","AMARANTE","CASA AZUCENA","CASA AZUCENA KT","FOR PUBLIC DISPLAY","GUILLERMO CASTRO","KIBYS","LA VI BY MAJO","LA VIE","LUNIA","MUSEE THE BRAND","SEA SALT","SEA SALT KT","VEMOC","WAYA ARTESANIAS SAS","ZALVA"],
-  "HELEN CEPEDA":["A MODO MIO","A MODO MIO KT","COMMON AREA KT","FARM RIO KT","FLOW","FLOW KT","FRANCQUES","JULIAMAR","LA OBRA DE ARTE SOY YO","LA OBRA DE ARTE SOY YO KT","MATILDA","MAYORGA","MICHELLE DACCARETT","MOCHILA MARKET","NOT A UNIFORM","NOT A UNIFORM KT","PADOVA","SUNSET","ZIERRA LEONA","ZIERRA LEONA KT","BROWNIE"],
-  "JESSICA DE LOS RIOS":["AC SHOES MAN","AGUEL","ALEJANDRO DE LA ROSA","ARGEMIRO SIERRA","BASSTO","BLUE BANANA KT","CEREAL","COOLWAY KT","DOS COSTAS","EL GANSO KT","FRANCESCA MIRANDA HOMBRE","GLEE","GOLDEN GOOSE KT","GOORIN BROS","GOORIN BROS KT","HOFF KT","JUAN SILVESTRE","LAZO","LUGO","MARINI STAR","NO DRAMA KT","ON RUNNING","ON RUNNING KT","PAPATTUS","PARDO","REMANENCE","SCALPERS","TRUE","UNO A UNO","VISTETE DE COLOMBIA","VISTETE DE COLOMBIA KT"],
-  "KATHERINE CHOPERENA":["APPLOD","BENEDETTA","BLESS","CASABELA","ENCANTADORE KT","JOHANNA ISAAC FADUL","MALAI","MILONGA","ONDA DE MAR KT","ONDADEMAR","WE ARE PROJECT","MICHU KT","ODM"],
-  "LEANYS CARDONA":["ADIDAS KT","ADIDAS","ALMA AZUL","ALMA EN PENA KT","ALOHAS KT","ALTA SHOES","AUTRY KT","FLABELUS KT","GARCES BOTTIER","GRACIA SHOES","LAURA CEPEDA","MATERGEA","MULATT","MULATT KT","NEW BALANCE KT","P448","PATRICIA MEJIA","PATRICIA MEJIA KT","SCHUTZ KT","THE FOUNDRY KT","VALARUZO","VEJA KT"],
-  "LISETH ROMERO":["STERING","A-FUN SOCKS TOK KT","ADIDAS TOK KT","AGUA D BELEN TOK","ALEXANDRABUENO TOK","AMANI","ANIMA","BABY CLASSIC TOK KT","BIMBIDREAMS TOK","BLUE BANANA TOK KT","CANDELIERI","CIGOTO TOK KT","COBAG LIBROS","CROCS TOK","DOS OJOS TOK","EN TELA TOK","IGOR","IGOR TOK KT","JOLIE TOK","JOY HUNTERS TOK KT","JULIAN EN HILOS","KRONOTIME","LA POMPONETTE TOK","LACE IT UP KT","LAPU TOK KT","LOBSTER MINI TOK KT","LPG TOK","MALVA ACCESORIES KT","MIJAL GLEISER","MISKHY","MR.BOHO","NIPSKIN","NIXON","NVO MONERIA TOK","ON RUNNING TOK KT","OQUI TOK","PAULA MENDOZA KT","PEPITA Y ME","QUAKQUAK TOK","RAINBOW RIDERS TOK KT","RAYITO DE SOL TOK","RELICARIO KIDS TOK","ROMEO KIDS TOK KT","SAN BABY TOK KT","SENDA","STERLING","TED BAKER","THE HAIR GENERATION","THE SOCKCIETY KT","TRES OVEJAS TOK KT","UKELE TOK KT","VAST TOK KT","VEJA TOK KT","WOMA"],
-  "MARIA ALEJANDRA DE LA CRUZ":["ALITZA GARCIA","AMI PARIS KT","ANCA RAVELO","ANDREA LANDA KT","ANDRES OTALORA KT","ARIAL 12","CULT GAIA KT","DIVINA CASTIDAD","ESPECIA","GANNI","ISABEL MARANT KT","JACQUEMUS","JONATHAN SIMKHAI KT","JORGE DUQUE KT","LEGADO","MARIA ELENA VILLAMIL KT","MICHU","OLGA BERG KT","PAJARO LIMON","PAMELA STEVENSON","PAMELA STEVENSON KT","PEPA POMBO KT","PINKO","SILVIA ARAOS KT","VERDI KT","VOIE KT","WAIMARI KT","ZADIG ET VOLTAIRE","ZIMMERMANN KT"]
-}
-let cachedSessions=[];
-
-async function setSyncDot(state){
-  const d=document.getElementById('sync-dot');if(!d)return;
-  d.style.background=state==='ok'?'#10B981':state==='error'?'#EF4444':'#F59E0B';
-  d.title=state==='ok'?'Firebase OK':state==='error'?'Sin conexion':'Sincronizando...';
-}
-
-async function loadSessions(){
-  setSyncDot('syncing');
-  try{
-    const snap=await db.collection(COL).orderBy('created_at','desc').get();
-    cachedSessions=snap.docs.map(function(d){
-      var r=d.data();
-      return{id:r.id,asesor:r.asesor,fecha:r.fecha,evaluador:r.evaluador,
-        b1Score:r.b1Score,b2Score:r.b2Score,finalScore:r.finalScore,
-        b1Data:r.b1Data||{},b2Data:r.b2Data||{},selBrands:r.selBrands||[],
-        week:r.week,month:r.month,sigAsesor:r.sigAsesor||'',sigEvaluador:r.sigEvaluador||'',
-        fireId:d.id};
-    });
-    localStorage.setItem('malva_sessions',JSON.stringify(cachedSessions));
-    setSyncDot('ok');
-  }catch(e){
-    console.error('Firebase:',e);
-    try{cachedSessions=JSON.parse(localStorage.getItem('malva_sessions')||'[]');}catch(ex){cachedSessions=[];}
-    setSyncDot('error');
-  }
-  renderSessions();renderReportPreview();
-}
-
-async function saveToSupabase(session){
-  setSyncDot('syncing');
-  try{
-    const data={id:session.id,asesor:session.asesor,fecha:session.fecha,evaluador:session.evaluador,
-      b1Score:session.b1Score,b2Score:session.b2Score,finalScore:session.finalScore,
-      b1Data:session.b1Data,b2Data:session.b2Data,selBrands:session.selBrands,
-      week:session.week,month:session.month,
-      sigAsesor:session.sigAsesor,sigEvaluador:session.sigEvaluador,
-      created_at:firebase.firestore.FieldValue.serverTimestamp()};
-    const ref=await db.collection(COL).add(data);
-    session.fireId=ref.id;
-    setSyncDot('ok');return true;
-  }catch(e){console.error('Firebase save:',e);setSyncDot('error');return false;}
-}
-
-async function deleteFromSupabase(id){
-  setSyncDot('syncing');
-  try{
-    const sess=cachedSessions.find(function(s){return s.id===id;});
-    if(sess&&sess.fireId){
-      await db.collection(COL).doc(sess.fireId).delete();
-    } else {
-      const snap=await db.collection(COL).where('id','==',id).get();
-      snap.forEach(function(d){d.ref.delete();});
-    }
-    setSyncDot('ok');
-  }catch(e){console.error('Firebase del:',e);setSyncDot('error');}
+  "MARIA ALEJANDRA DE LA CRUZ":["ADIDAS","ADIDAS TOK KT","ALMA AZUL","ALMA EN PENA KT","ALOHAS KT","ALTA SHOES","COOLWAY KT","EL GANSO KT","GOLDEN GOOSE KT","HOFF KT","MULATT","NEW BALANCE KT","OQ SHOES","P448","SCALPERS","SCHUTZ KT","VEJA KT","VEJA TOK KT"],
+  "ALEXANDRA TORTELLO":["08MIL","A MODO MIO","ALGODON Y COCO","ANANA","EMUNA","ESPECIA","FARM RIO KT","FOR PUBLIC DISPLAY","GUILLERMO CASTRO","JULIAMAR","LA VI BY MAJO","MATILDA","MOCHILA MARKET","PADOVA","PAJARO LIMON","STERLING","VERDI KT","VOIE KT","ZALVA"],
+  "CAMILO ARGEL":["A -FUN SOCKS TOK KT","ABRIL FLORES MIL TOK","ADIDAS","AGUEL","ALEJANDRO DE LA ROSA","ARGEMIRO SIERRA","BIMBIDREAMS TOK","BLUE BANANA KT","BLUE BANANA TOK KT","CIGOTO TOK KT","DOS COSTAS","DOS OJOS TOK","EL GANSO KT","EN TELA TOK","FRANCESCA MIRANDA HOMBRE","FRANCQUES","GLEE","JOLIE TOK","JOY HUNTERS TOK KT","JUAN SILVESTRE","JULIAN EN HILOS","LACE IT UP KT","LACOSTE KT","LAPU TOK KT","LOBSTER MINI TOK","LOBSTER MINI TOK KT","LPG TOK","LUGO","MARINI STAR","NO DRAMA KT","ON RUNNING","ONDA DE MAR KT","ONDADEMAR","OQUI TOK","PARDO","PEPITA & ME","QUAKQUAK TOK","RAINBOW RIDERS TOK KT","RAYITO DE SOL TOK","RELICARIO KIDS TOK","REMANENCE","ROMEO KIDS TOK","ROMEO KIDS TOK KT","SAN BABY TOK KT","SCALPERS","THE SOCKCIETY KT","TRUE","UNO A UNO","VISTETE DE COLOMBIA","VOIE KT"],
+  "HELEN CEPEDA":["ADRIANA CONTRERAS","AMANI","BLESS","BROWNIE","CASA AZUCENA","KRONOTIME","LA VIE","LUNIA","MALAI","MAR DE LUA","MILONGA","MISKHY","MR.BOHO","NIPSKIN","NIXON","PAULA MENDOZA KT","SEA SALT","SENDA","TED BAKER","WE ARE PROJECT"],
+  "KATHERINE CHOPERENA":["ADRIANA RINKEL","ALITZA GARCIA","AMI PARIS KT","ANCA RAVELO","ANDREA LANDA KT","ARIAL 12","COMMON AREA KT","CULT GAIA KT","DIVINA CASTIDAD","FLOW","GANNI","ISABEL MARANT KT","JONATHAN SIMKHAI KT","JORGE DUQUE KT","LA OBRA DE ARTE SOY YO","LEGADO","MARC JACOBS KT","MARIA ELENA VILLAMIL KT","NOT A UNIFORM","OLGA BERG KT","OLIVIA MAREQUE KT","PAMELA STEVENSON","PINKO","STELLA MCCARTNEY KT","WAIMARI KT","ZADIG ET VOLTAIRE","ZIERRA LEONA","ZIMMERMANN KT"],
+  "LEANYS CARDONA":["AGUA COCO","AGUA D´ BELEN TOK","AMARANTE","ARTIBIANA","BAOBAB","BENEDETTA","CASABELA","ENCANTADORE","ENCANTADORE KT","JOHANNA ISAAC FADUL","KIBYS","LOBO ROSA","MALVA ACCESORIES KT","MAYORGA","MICHELLE DACCARETT","MICHU","MIJAL GLEISER","MUSEE THE BRAND","NICOLE RAVACHI BRAND","ONDA DE MAR KT","THE HAIR GENERATION","VEMOC"],
+  "LISETH ROMERO":["AC SHOES MAN","AUTRY KT","CROCS TOK","FLABELUS KT","GARCES BOTTIER","GRACIA SHOES","IGOR","IGOR TOK KT","LA POMPONETTE TOK","LEJAN TOK KT","MATERGEA","MIRKO","ON RUNNING KT","ON RUNNING TOK KT","PAPATTUS","THE FOUNDRY KT","VALARUZO"]
 };
 const B1=["Presentación Personal","Limpieza","Higiene Personal","Calzado","Rostro","Planchado"];
 const B2=["Surtido","Limpieza","Planchado","Etiquetado","Pinado","Senalizacion","Tallas"];
@@ -422,32 +364,39 @@ let S={asesor:"",fecha:"",evaluador:"",b1:{},b2:{},selBrands:[]};
 let currentViewSess=null;
 
 // ── INIT ──
-function startApp(){
-  // Wait for Firebase SDK to be available
+function initFirebase(retries){
+  retries=retries||0;
   if(typeof firebase==='undefined'){
-    setTimeout(startApp,100);
+    if(retries<30){setTimeout(function(){initFirebase(retries+1);},100);}
+    else{setSyncDot('error');console.error('Firebase SDK no cargo');}
     return;
   }
-  // Initialize Firebase
   try{
-    firebase.initializeApp({
-      apiKey: "AIzaSyDaUegcGuCzRXdro3akqpFFN-cNploVs-E",
-      authDomain: "malva-evaluacion.firebaseapp.com",
-      projectId: "malva-evaluacion",
-      storageBucket: "malva-evaluacion.firebasestorage.app",
-      messagingSenderId: "223572518464",
-      appId: "1:223572518464:web:0844e9b4b05c5f414661a5"
-    });
+    if(!firebase.apps.length){
+      firebase.initializeApp({
+        apiKey: "AIzaSyDaUegcGuCzRXdro3akqpFFN-cNploVs-E",
+        authDomain: "malva-evaluacion.firebaseapp.com",
+        projectId: "malva-evaluacion",
+        storageBucket: "malva-evaluacion.firebasestorage.app",
+        messagingSenderId: "223572518464",
+        appId: "1:223572518464:web:0844e9b4b05c5f414661a5"
+      });
+    }
     db=firebase.firestore();
-  }catch(e){console.error('Firebase init:',e);}
+    loadSessions();
+  }catch(e){console.error('Firebase init:',e);setSyncDot('error');}
+}
 
+function startApp(){
+  // 1. Render UI immediately (does not depend on Firebase)
   document.getElementById('fecha').value=new Date().toISOString().split('T')[0];
   const sel=document.getElementById('asesor-sel');
   Object.keys(ASESORES).sort().forEach(a=>{
     const o=document.createElement('option');o.value=a;o.textContent=a;sel.appendChild(o);
   });
   showScreen('sc-home');
-  loadSessions();
+  // 2. Connect Firebase in background (loadSessions runs when ready)
+  initFirebase();
 }
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded',startApp);
