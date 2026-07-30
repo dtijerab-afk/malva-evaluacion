@@ -387,6 +387,71 @@ function initFirebase(retries){
   }catch(e){console.error('Firebase init:',e);setSyncDot('error');}
 }
 
+function setSyncDot(state){
+  const d=document.getElementById('sync-dot');if(!d)return;
+  d.style.background=state==='ok'?'#10B981':state==='error'?'#EF4444':'#F59E0B';
+  d.title=state==='ok'?'Firebase OK':state==='error'?'Sin conexion':'Sincronizando...';
+}
+
+async function loadSessions(){
+  if(!db){
+    try{cachedSessions=JSON.parse(localStorage.getItem('malva_sessions')||'[]');}catch(e){cachedSessions=[];}
+    renderSessions();renderReportPreview();
+    return;
+  }
+  setSyncDot('syncing');
+  try{
+    const snap=await db.collection(COL).orderBy('created_at','desc').get();
+    cachedSessions=snap.docs.map(function(d){
+      var r=d.data();
+      return{id:r.id,asesor:r.asesor,fecha:r.fecha,evaluador:r.evaluador,
+        b1Score:r.b1Score,b2Score:r.b2Score,finalScore:r.finalScore,
+        b1Data:r.b1Data||{},b2Data:r.b2Data||{},selBrands:r.selBrands||[],
+        week:r.week,month:r.month,sigAsesor:r.sigAsesor||'',sigEvaluador:r.sigEvaluador||'',
+        fireId:d.id};
+    });
+    localStorage.setItem('malva_sessions',JSON.stringify(cachedSessions));
+    setSyncDot('ok');
+  }catch(e){
+    console.error('Firebase load:',e);
+    try{cachedSessions=JSON.parse(localStorage.getItem('malva_sessions')||'[]');}catch(ex){cachedSessions=[];}
+    setSyncDot('error');
+  }
+  renderSessions();renderReportPreview();
+}
+
+async function saveToSupabase(session){
+  if(!db){setSyncDot('error');return false;}
+  setSyncDot('syncing');
+  try{
+    const data={id:session.id,asesor:session.asesor,fecha:session.fecha,evaluador:session.evaluador,
+      b1Score:session.b1Score,b2Score:session.b2Score,finalScore:session.finalScore,
+      b1Data:session.b1Data,b2Data:session.b2Data,selBrands:session.selBrands,
+      week:session.week,month:session.month,
+      sigAsesor:session.sigAsesor,sigEvaluador:session.sigEvaluador,
+      created_at:firebase.firestore.FieldValue.serverTimestamp()};
+    const ref=await db.collection(COL).add(data);
+    session.fireId=ref.id;
+    setSyncDot('ok');return true;
+  }catch(e){console.error('Firebase save:',e);setSyncDot('error');return false;}
+}
+
+async function deleteFromSupabase(id){
+  if(!db){return;}
+  setSyncDot('syncing');
+  try{
+    const sess=cachedSessions.find(function(s){return s.id===id;});
+    if(sess&&sess.fireId){
+      await db.collection(COL).doc(sess.fireId).delete();
+    }else{
+      const snap=await db.collection(COL).where('id','==',id).get();
+      snap.forEach(function(d){d.ref.delete();});
+    }
+    setSyncDot('ok');
+  }catch(e){console.error('Firebase del:',e);setSyncDot('error');}
+}
+
+
 function startApp(){
   // 1. Render UI immediately (does not depend on Firebase)
   document.getElementById('fecha').value=new Date().toISOString().split('T')[0];
